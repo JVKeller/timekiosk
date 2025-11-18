@@ -1,0 +1,7 @@
+{
+  "name": "TimeKiosk",
+  "description": "An employee timekeeping application designed for kiosk use on tablets, featuring QR code scanning and PIN entry for quick clock-in and clock-out.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
