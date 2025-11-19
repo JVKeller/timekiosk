@@ -11,7 +11,7 @@ export const useTimeKioskData = () => {
     const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
-    const [settings, setSettings] = useState<AppSettings>({ weekStartDay: 0, logoUrl: '' });
+    const [settings, setSettings] = useState<AppSettings>({ weekStartDay: 0, logoUrl: '', remoteDbUrl: '' });
     const [loading, setLoading] = useState(true);
 
     const seedData = useMockData();
@@ -78,7 +78,11 @@ export const useTimeKioskData = () => {
         const subSettings = db.settings.findOne('GLOBAL_SETTINGS').$.subscribe(doc => {
             if (doc) {
                 const s = doc.toJSON();
-                setSettings({ logoUrl: s.logoUrl, weekStartDay: s.weekStartDay });
+                setSettings({ 
+                    logoUrl: s.logoUrl, 
+                    weekStartDay: s.weekStartDay,
+                    remoteDbUrl: s.remoteDbUrl 
+                });
             }
         });
 
@@ -92,6 +96,13 @@ export const useTimeKioskData = () => {
             subSettings.unsubscribe();
         };
     }, [db]);
+
+    // Automatically trigger sync when the remote URL changes in settings
+    useEffect(() => {
+        if (db && settings.remoteDbUrl) {
+            (db as any).sync(settings.remoteDbUrl);
+        }
+    }, [db, settings.remoteDbUrl]);
 
     const addEmployee = async (emp: Employee) => {
         await db?.employees.insert(emp);
@@ -184,6 +195,7 @@ export const useTimeKioskData = () => {
         await db?.settings.upsert({ id: 'GLOBAL_SETTINGS', ...newSettings });
     };
 
+    // Exposed manual sync if needed, but useEffect handles it mostly
     const sync = (url: string) => {
         if(db && (db as any).sync) {
             (db as any).sync(url);

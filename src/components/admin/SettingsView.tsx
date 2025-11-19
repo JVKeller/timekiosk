@@ -41,6 +41,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         onUpdateSettings({ ...settings, weekStartDay: parseInt(e.target.value) });
     };
 
+    // Database Sync Settings
+    const handleSyncUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        onUpdateSettings({ ...settings, remoteDbUrl: e.target.value });
+    };
+
     // Location Management
     const handleAddLocation = (e: React.FormEvent) => {
         e.preventDefault();
@@ -138,6 +143,42 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                                 <option key={index} value={index}>{day}</option>
                             ))}
                         </select>
+                    </div>
+                </div>
+            </section>
+
+             {/* Database Sync Settings */}
+             <section className="bg-slate-800 p-6 rounded-lg shadow-lg">
+                <h2 className="text-2xl font-bold text-teal-400 mb-4">Data Synchronization</h2>
+                <div className="space-y-6">
+                    <div className="bg-slate-900 p-4 rounded border border-slate-700">
+                        <p className="text-sm text-slate-300 mb-2">
+                            To sync multiple devices, run the included sync server on your main computer:
+                        </p>
+                        <code className="block bg-black p-2 rounded text-green-400 font-mono text-sm mb-4">
+                            node sync-server.js
+                        </code>
+                        <label className="block mb-2 font-semibold">Remote Server URL</label>
+                        <p className="text-xs text-slate-400 mb-2">
+                            Enter the URL displayed by the sync server.<br/>
+                            Format: <code>http://IP_ADDRESS:5984/db</code>
+                        </p>
+                        <input 
+                            type="text" 
+                            placeholder="http://192.168.1.50:5984/db" 
+                            value={settings.remoteDbUrl || ''} 
+                            onChange={handleSyncUrlChange}
+                            className="w-full p-3 bg-slate-700 rounded-lg text-white border border-slate-600 focus:border-teal-500 focus:outline-none font-mono text-sm"
+                        />
+                        {settings.remoteDbUrl && (
+                            <div className="mt-2 flex items-center gap-2">
+                                <span className="flex h-3 w-3 relative">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                                </span>
+                                <span className="text-sm text-green-400">Sync Active</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </section>

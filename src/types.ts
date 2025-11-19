@@ -35,6 +35,7 @@ export interface Department {
 export interface AppSettings {
   logoUrl?: string;
   weekStartDay: number; // 0 = Sunday, 1 = Monday, etc.
+  remoteDbUrl?: string; // URL for CouchDB Sync
 }
 
 export enum ClockStatus {

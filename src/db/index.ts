@@ -6,14 +6,14 @@ import {
 } from 'rxdb';
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
-import { wrappedKeyEncryptionCryptoJsStorage } from 'rxdb/plugins/encryption-crypto-js';
 import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
+// Use storage wrapper for encryption instead of the plugin
+import { wrappedKeyEncryptionCryptoJsStorage } from 'rxdb/plugins/encryption-crypto-js';
 import { replicateCouchDB, RxCouchDBReplicationState } from 'rxdb/plugins/replication-couchdb';
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
-// Fix: Use default import for crypto-js
 import CryptoJS from 'crypto-js';
 import * as schemas from './schemas';
 
@@ -48,20 +48,19 @@ const getStorage = () => {
         baseStorage = getRxStorageDexie();
     }
 
-    // 1. Encrypt data before it hits the physical storage
+    // 1. Encrypt: Wrap the base storage to encrypt data writing to disk
     const encryptedStorage = wrappedKeyEncryptionCryptoJsStorage({
         storage: baseStorage
     });
 
-    // 2. Validate data before it gets encrypted
-    // This must be the top-level storage for DevMode to work
+    // 2. Validate: Wrap the encrypted storage to validate data before encryption
     return wrappedValidateAjvStorage({
         storage: encryptedStorage
     });
 };
 
 const createDatabase = async (): Promise<TimeKioskDatabase> => {
-    const dbName = 'timekioskdb_v6'; // Versioned name to ensure fresh start
+    const dbName = 'timekioskdb_v8'; // Versioned name for fresh start
 
     const db = await createRxDatabase<TimeKioskCollections>({
         name: dbName,
@@ -69,8 +68,7 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
         password: 'my-secret-encryption-password',
         multiInstance: !isCapacitor,
         ignoreDuplicate: true,
-        // Fix for non-secure contexts (HTTP/IP access):
-        // Use crypto-js instead of Native Web Crypto API which requires HTTPS
+        // Use CryptoJS for hashing in non-secure contexts (HTTP)
         hashFunction: (input: string) => {
             return Promise.resolve(CryptoJS.SHA256(input).toString());
         }
@@ -90,6 +88,8 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
     (db as any).sync = async (remoteUrl: string) => {
         if (!remoteUrl) return;
 
+        console.log(`Initializing Sync with: ${remoteUrl}`);
+
         // 1. Cancel existing replications
         await Promise.all(activeReplications.map(rep => rep.cancel()));
         activeReplications.length = 0;
@@ -98,18 +98,25 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
             'employees', 'timerecords', 'locations', 'departments', 'settings'
         ];
         
-        const sanitizedUrl = remoteUrl.replace(/\/+$/, '');
+        const baseUrl = remoteUrl.replace(/\/+$/, '');
 
         collectionNames.forEach(colName => {
             const collection = db.collections[colName];
             if (collection) {
+                const url = `${baseUrl}/${colName}`;
+
                 const replicationState = replicateCouchDB({
                     replicationIdentifier: `sync-${colName}`,
                     collection: collection,
-                    url: `${sanitizedUrl}/${colName}`,
+                    url: url,
                     live: true,
-                    pull: {},
-                    push: {}
+                    pull: {
+                        batchSize: 60,
+                        heartbeat: 60000
+                    },
+                    push: {
+                        batchSize: 60
+                    }
                 });
                 
                 replicationState.error$.subscribe(err => {
@@ -119,16 +126,14 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
                 activeReplications.push(replicationState);
             }
         });
-        console.log(`Sync started with ${sanitizedUrl}`);
     };
 
     return db;
 };
 
 // HMR-safe singleton pattern
-// This ensures the DB promise is persisted across module reloads
 const _window = typeof window !== 'undefined' ? (window as any) : {};
-const DB_PROMISE_KEY = 'timekiosk_db_promise_v6';
+const DB_PROMISE_KEY = 'timekiosk_db_promise_v8';
 
 export const getDatabase = () => {
     if (!_window[DB_PROMISE_KEY]) {
