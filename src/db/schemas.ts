@@ -1,8 +1,7 @@
-
 import { RxJsonSchema } from 'rxdb';
 
-// Note: Storage-level encryption is enabled in index.ts, 
-// so we do not need 'encrypted: true' on individual fields.
+// Storage-level encryption is enabled in index.ts (wrappedKeyEncryptionCryptoJsStorage).
+// Field-level 'encrypted: true' flags are removed to prevent plugin dependency errors.
 
 export const employeeSchema: any = {
     title: 'employee',
@@ -31,7 +30,6 @@ export const timeRecordSchema: any = {
     type: 'object',
     properties: {
         id: { type: 'string', maxLength: 100 },
-        // SC34 Fix: Added maxLength because this field is used in an index
         employeeId: { type: 'string', maxLength: 100 },
         locationId: { type: 'string' },
         clockIn: { type: 'string', format: 'date-time' }, 

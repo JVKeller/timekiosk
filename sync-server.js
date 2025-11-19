@@ -1,4 +1,3 @@
-
 const express = require('express');
 const PouchDB = require('pouchdb');
 const ExpressPouchDB = require('express-pouchdb');
