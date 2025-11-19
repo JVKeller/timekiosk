@@ -1,13 +1,12 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { getDatabase, TimeKioskDatabase } from '../db';
 import type { Employee, TimeRecord, Location, Department, AppSettings } from '../types';
-import { useMockData } from './useMockData'; // Fallback/Initial seed data
+import { useMockData } from './useMockData';
 
 export const useTimeKioskData = () => {
     const [db, setDb] = useState<TimeKioskDatabase | null>(null);
     
-    // State mirrors of DB data for React rendering
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
@@ -17,20 +16,16 @@ export const useTimeKioskData = () => {
 
     const seedData = useMockData();
 
-    // 1. Initialize DB
     useEffect(() => {
         const init = async () => {
             const _db = await getDatabase();
             setDb(_db);
 
-            // --- Seeding Data (One time dev helper) ---
-            // Check if data exists, if not, seed from mock data
             const empCount = await _db.employees.count().exec();
             if (empCount === 0) {
                 console.log("Seeding Database...");
                 await _db.employees.bulkInsert(seedData.employees);
                 
-                // Convert Dates to ISO strings for RxDB
                 const records = seedData.timeRecords.map(r => ({
                     ...r,
                     clockIn: r.clockIn.toISOString(),
@@ -49,7 +44,6 @@ export const useTimeKioskData = () => {
         init();
     }, []);
 
-    // 2. Subscriptions (Live Queries)
     useEffect(() => {
         if (!db) return;
 
@@ -58,7 +52,6 @@ export const useTimeKioskData = () => {
         });
 
         const subRecords = db.timerecords.find().$.subscribe(docs => {
-            // Convert ISO strings back to Date objects for the App
             const parsedRecords = docs.map(d => {
                 const json = d.toJSON();
                 return {
@@ -100,18 +93,13 @@ export const useTimeKioskData = () => {
         };
     }, [db]);
 
-    // --- Actions ---
-
     const addEmployee = async (emp: Employee) => {
         await db?.employees.insert(emp);
     };
 
     const updateEmployee = async (emp: Employee) => {
-        // RxDB requires fetching the document then updating, or using upsert
         const doc = await db?.employees.findOne(emp.id).exec();
-        if (doc) {
-            await doc.patch(emp);
-        }
+        if (doc) await doc.patch(emp);
     };
 
     const archiveEmployee = async (id: string) => {
@@ -127,7 +115,6 @@ export const useTimeKioskData = () => {
     const deleteEmployeePermanently = async (id: string) => {
         const doc = await db?.employees.findOne(id).exec();
         await doc?.remove();
-        // Cascade delete records
         const records = await db?.timerecords.find({ selector: { employeeId: id } }).exec();
         if (records) await Promise.all(records.map(r => r.remove()));
     };
@@ -164,12 +151,7 @@ export const useTimeKioskData = () => {
     };
 
     const updateLocations = async (newLocations: Location[]) => {
-        // Full sync approach for simple lists: remove all, add all (or smart diff)
-        // For simplicity in this migration:
-        // In a real app, individual add/remove/update is better
-        // Here we just upsert individually
         if (!db) return;
-        // Find deleted
         const currentIds = locations.map(l => l.id);
         const newIds = newLocations.map(l => l.id);
         const toDelete = currentIds.filter(id => !newIds.includes(id));
@@ -178,7 +160,6 @@ export const useTimeKioskData = () => {
             const doc = await db.locations.findOne(id).exec();
             await doc?.remove();
         }
-        
         for (const loc of newLocations) {
             await db.locations.upsert(loc);
         }
@@ -194,7 +175,6 @@ export const useTimeKioskData = () => {
             const doc = await db.departments.findOne(id).exec();
             await doc?.remove();
         }
-        
         for (const dep of newDepartments) {
             await db.departments.upsert(dep);
         }

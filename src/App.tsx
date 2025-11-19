@@ -31,9 +31,6 @@ const App: React.FC = () => {
       actions 
   } = useTimeKioskData();
   
-  // Note: 'employees', 'timeRecords', etc., are now kept in sync by the hook via RxDB subscriptions.
-  // We no longer need setters for these specific data arrays in App.tsx.
-
   const [currentView, setCurrentView] = useState<View>('HOME');
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [identifiedEmployee, setIdentifiedEmployee] = useState<Employee | null>(null);
@@ -221,7 +218,6 @@ const App: React.FC = () => {
   const handleClockOut = (employeeId: string) => {
     clearStatusTimeout();
     // Logic to find last record is now handled by finding it in the list
-    // In a real DB query you might just query the last open record
     const activeRecord = timeRecords
         .slice()
         .reverse()

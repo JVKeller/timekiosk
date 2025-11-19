@@ -1,7 +1,10 @@
 
 import { RxJsonSchema } from 'rxdb';
 
-export const employeeSchema: RxJsonSchema<any> = {
+// Note: Storage-level encryption is enabled in index.ts, 
+// so we do not need 'encrypted: true' on individual fields.
+
+export const employeeSchema: any = {
     title: 'employee',
     version: 0,
     primaryKey: 'id',
@@ -9,7 +12,7 @@ export const employeeSchema: RxJsonSchema<any> = {
     properties: {
         id: { type: 'string', maxLength: 100 },
         name: { type: 'string' },
-        pin: { type: 'string' }, // Will be encrypted via DB password
+        pin: { type: 'string' },
         imageUrl: { type: 'string' },
         archived: { type: 'boolean' },
         autoDeductLunch: { type: 'boolean' },
@@ -21,16 +24,17 @@ export const employeeSchema: RxJsonSchema<any> = {
     required: ['id', 'name', 'pin']
 };
 
-export const timeRecordSchema: RxJsonSchema<any> = {
+export const timeRecordSchema: any = {
     title: 'time_record',
     version: 0,
     primaryKey: 'id',
     type: 'object',
     properties: {
         id: { type: 'string', maxLength: 100 },
-        employeeId: { type: 'string' },
+        // SC34 Fix: Added maxLength because this field is used in an index
+        employeeId: { type: 'string', maxLength: 100 },
         locationId: { type: 'string' },
-        clockIn: { type: 'string', format: 'date-time' }, // RxDB stores dates as ISO strings
+        clockIn: { type: 'string', format: 'date-time' }, 
         clockOut: { type: 'string', format: 'date-time' },
         breaks: {
             type: 'array',
@@ -47,7 +51,7 @@ export const timeRecordSchema: RxJsonSchema<any> = {
     indexes: ['employeeId']
 };
 
-export const locationSchema: RxJsonSchema<any> = {
+export const locationSchema: any = {
     title: 'location',
     version: 0,
     primaryKey: 'id',
@@ -60,7 +64,7 @@ export const locationSchema: RxJsonSchema<any> = {
     required: ['id', 'name']
 };
 
-export const departmentSchema: RxJsonSchema<any> = {
+export const departmentSchema: any = {
     title: 'department',
     version: 0,
     primaryKey: 'id',
@@ -72,10 +76,10 @@ export const departmentSchema: RxJsonSchema<any> = {
     required: ['id', 'name']
 };
 
-export const settingsSchema: RxJsonSchema<any> = {
+export const settingsSchema: any = {
     title: 'settings',
     version: 0,
-    primaryKey: 'id', // Singleton, usually 'GLOBAL_SETTINGS'
+    primaryKey: 'id', 
     type: 'object',
     properties: {
         id: { type: 'string', maxLength: 100 },

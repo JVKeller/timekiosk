@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { Employee, Location, TimeRecord, Department, AppSettings } from '../../types';
 import { getWeekStart, calculateDuration, formatDateTimeForInput, parseDateTimeInput, formatShortDuration } from '../../utils';
@@ -20,6 +19,7 @@ import EditIcon from '../icons/EditIcon';
 import QrCodeIcon from '../icons/QrCodeIcon';
 import SettingsIcon from '../icons/SettingsIcon';
 import ReportsIcon from '../icons/ReportsIcon';
+import EmployeeImage from '../EmployeeImage';
 
 interface AdminDashboardProps {
     employees: Employee[];

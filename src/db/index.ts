@@ -8,13 +8,16 @@ import {
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedKeyEncryptionCryptoJsStorage } from 'rxdb/plugins/encryption-crypto-js';
+import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
 import { replicateCouchDB, RxCouchDBReplicationState } from 'rxdb/plugins/replication-couchdb';
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
+import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import * as schemas from './schemas';
 
 // --- Plugins ---
+addRxPlugin(RxDBDevModePlugin);
 addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
 addRxPlugin(RxDBUpdatePlugin);
@@ -30,11 +33,8 @@ export type TimeKioskCollections = {
 
 export type TimeKioskDatabase = RxDatabase<TimeKioskCollections>;
 
-let dbPromise: Promise<TimeKioskDatabase> | null = null;
-// Track active replication states to allow cancellation
 const activeReplications: RxCouchDBReplicationState<any>[] = [];
 
-// --- Environment Detection ---
 const isNode = typeof window === 'undefined';
 const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
 
@@ -44,38 +44,47 @@ const getStorage = () => {
         console.log('Initializing DB in Node environment (Memory)');
         baseStorage = getRxStorageMemory();
     } else {
-        console.log('Initializing DB in Browser/Mobile environment (Dexie/IndexedDB)');
         baseStorage = getRxStorageDexie();
     }
 
-    // WARNING: In production, use a secure key management strategy
-    return wrappedKeyEncryptionCryptoJsStorage({
+    // 1. Encrypt data before it hits the physical storage
+    const encryptedStorage = wrappedKeyEncryptionCryptoJsStorage({
         storage: baseStorage
+    });
+
+    // 2. Validate data before it gets encrypted
+    // This must be the top-level storage for DevMode to work
+    return wrappedValidateAjvStorage({
+        storage: encryptedStorage
     });
 };
 
 const createDatabase = async (): Promise<TimeKioskDatabase> => {
+    const dbName = 'timekioskdb_v6'; // Versioned name to ensure fresh start
+
     const db = await createRxDatabase<TimeKioskCollections>({
-        name: 'timekioskdb',
+        name: dbName,
         storage: getStorage(),
         password: 'my-secret-encryption-password',
         multiInstance: !isCapacitor,
         ignoreDuplicate: true
     });
 
-    await db.addCollections({
-        employees: { schema: schemas.employeeSchema },
-        timerecords: { schema: schemas.timeRecordSchema },
-        locations: { schema: schemas.locationSchema },
-        departments: { schema: schemas.departmentSchema },
-        settings: { schema: schemas.settingsSchema }
-    });
+    // Check if collections exist before adding (safe for re-runs)
+    if (!db.collections.employees) {
+        await db.addCollections({
+            employees: { schema: schemas.employeeSchema },
+            timerecords: { schema: schemas.timeRecordSchema },
+            locations: { schema: schemas.locationSchema },
+            departments: { schema: schemas.departmentSchema },
+            settings: { schema: schemas.settingsSchema }
+        });
+    }
 
-    // --- Sync Setup ---
     (db as any).sync = async (remoteUrl: string) => {
         if (!remoteUrl) return;
 
-        // 1. Cancel existing replications to prevent leaks/duplicates
+        // 1. Cancel existing replications
         await Promise.all(activeReplications.map(rep => rep.cancel()));
         activeReplications.length = 0;
 
@@ -83,7 +92,6 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
             'employees', 'timerecords', 'locations', 'departments', 'settings'
         ];
         
-        // 2. Remove trailing slash from URL if present
         const sanitizedUrl = remoteUrl.replace(/\/+$/, '');
 
         collectionNames.forEach(colName => {
@@ -94,11 +102,10 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
                     collection: collection,
                     url: `${sanitizedUrl}/${colName}`,
                     live: true,
-                    pull: {}, // Pull all documents
-                    push: {}  // Push all local changes
+                    pull: {},
+                    push: {}
                 });
                 
-                // Log errors for debugging
                 replicationState.error$.subscribe(err => {
                     console.error(`Replication error (${colName}):`, err);
                 });
@@ -112,9 +119,14 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
     return db;
 };
 
+// HMR-safe singleton pattern
+// This ensures the DB promise is persisted across module reloads
+const _window = typeof window !== 'undefined' ? (window as any) : {};
+const DB_PROMISE_KEY = 'timekiosk_db_promise_v6';
+
 export const getDatabase = () => {
-    if (!dbPromise) {
-        dbPromise = createDatabase();
+    if (!_window[DB_PROMISE_KEY]) {
+        _window[DB_PROMISE_KEY] = createDatabase();
     }
-    return dbPromise;
+    return _window[DB_PROMISE_KEY] as Promise<TimeKioskDatabase>;
 };

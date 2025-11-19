@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { Employee, Location, TimeRecord, View, Department, AppSettings } from './types';
-import { useMockData } from './hooks/useMockData';
+import type { Employee, TimeRecord, View } from './types';
+import { useTimeKioskData } from './hooks/useTimeKioskData';
 import { getWeekStart } from './utils';
 
 import DigitalClock from './components/DigitalClock';
@@ -17,25 +17,19 @@ import PinIcon from './components/icons/PinIcon';
 import AdminIcon from './components/icons/AdminIcon';
 import EmployeeImage from './components/EmployeeImage';
 
-// --- MAIN APP COMPONENT ---
-
 const App: React.FC = () => {
   const { 
-      employees: initialEmployees, 
-      locations: initialLocations, 
-      timeRecords: initialTimeRecords,
-      departments: initialDepartments,
-      settings: initialSettings
-  } = useMockData();
+      employees, 
+      locations, 
+      timeRecords, 
+      departments, 
+      settings,
+      loading,
+      actions 
+  } = useTimeKioskData();
   
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
-  const [locations, setLocations] = useState<Location[]>(initialLocations);
-  const [departments, setDepartments] = useState<Department[]>(initialDepartments);
-  const [settings, setSettings] = useState<AppSettings>(initialSettings);
-  const [timeRecords, setTimeRecords] = useState<TimeRecord[]>(initialTimeRecords);
-
   const [currentView, setCurrentView] = useState<View>('HOME');
-  const [selectedLocation, setSelectedLocation] = useState<string>(locations[0]?.id || '');
+  const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [identifiedEmployee, setIdentifiedEmployee] = useState<Employee | null>(null);
   const [pinMatchedEmployees, setPinMatchedEmployees] = useState<Employee[]>([]);
   const [pinError, setPinError] = useState<string | null>(null);
@@ -44,9 +38,7 @@ const App: React.FC = () => {
   const [timeoutDuration, setTimeoutDuration] = useState(0);
   const [confirmationMessage, setConfirmationMessage] = useState<{ message: string; type: 'in' | 'out' } | null>(null);
   
-  // Initialize with configured week start
   const [timecardWeekStart, setTimecardWeekStart] = useState<Date>(getWeekStart(new Date(), settings.weekStartDay));
-  
   const [timecardReturnView, setTimecardReturnView] = useState<View>('HOME');
   
   const [isTimerPaused, setIsTimerPaused] = useState(false);
@@ -57,7 +49,12 @@ const App: React.FC = () => {
   const adminTimeoutRef = useRef<number | null>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
 
-  // Sync week start when settings change
+  useEffect(() => {
+      if (locations.length > 0 && !selectedLocation) {
+          setSelectedLocation(locations[0].id);
+      }
+  }, [locations, selectedLocation]);
+
   useEffect(() => {
     setTimecardWeekStart(prev => getWeekStart(prev, settings.weekStartDay));
   }, [settings.weekStartDay]);
@@ -98,7 +95,6 @@ const App: React.FC = () => {
     });
   };
 
-  // Timeout for employee-facing screens
   useEffect(() => {
     clearStatusTimeout();
     
@@ -137,7 +133,6 @@ const App: React.FC = () => {
     };
   }, [currentView, identifiedEmployee]);
   
-  // 10-minute inactivity timeout for Admin Dashboard
   useEffect(() => {
     const resetAdminTimeout = () => {
       if (adminTimeoutRef.current) {
@@ -147,14 +142,12 @@ const App: React.FC = () => {
         if (currentView === 'ADMIN_DASHBOARD') {
             resetToHome();
         }
-      }, 10 * 60 * 1000); // 10 minutes
+      }, 10 * 60 * 1000); 
     };
 
     if (currentView === 'ADMIN_DASHBOARD') {
       const activityEvents = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
-      
-      resetAdminTimeout(); // Set initial timeout
-
+      resetAdminTimeout(); 
       activityEvents.forEach(event => {
         window.addEventListener(event, resetAdminTimeout, { passive: true });
       });
@@ -200,13 +193,11 @@ const App: React.FC = () => {
 
   const handleClockIn = (employeeId: string) => {
     clearStatusTimeout();
-    const newRecord: TimeRecord = {
-      id: `rec-${Date.now()}`,
-      employeeId,
-      locationId: selectedLocation,
-      clockIn: new Date(),
-    };
-    setTimeRecords([...timeRecords, newRecord]);
+    actions.addTimeRecord({
+        employeeId,
+        locationId: selectedLocation,
+        clockIn: new Date(),
+    });
     const employee = employees.find(e => e.id === employeeId);
     setConfirmationMessage({ message: `Welcome, ${employee?.name}! You are now clocked in.`, type: 'in'});
     setCurrentView('CONFIRMATION');
@@ -214,61 +205,55 @@ const App: React.FC = () => {
 
   const handleClockOut = (employeeId: string) => {
     clearStatusTimeout();
-    const lastRecordIndex = timeRecords.slice().reverse().findIndex(
-        (r) => r.employeeId === employeeId && !r.clockOut
-    );
+    const activeRecord = timeRecords
+        .slice()
+        .reverse()
+        .find(r => r.employeeId === employeeId && !r.clockOut);
 
-    if (lastRecordIndex !== -1) {
-        const originalIndex = timeRecords.length - 1 - lastRecordIndex;
-        const updatedRecords = [...timeRecords];
-        const recordToUpdate = updatedRecords[originalIndex];
-        updatedRecords[originalIndex] = { ...recordToUpdate, clockOut: new Date() };
-        setTimeRecords(updatedRecords);
+    if (activeRecord) {
+        actions.updateTimeRecord({ ...activeRecord, clockOut: new Date() });
     }
+
     const employee = employees.find(e => e.id === employeeId);
     setConfirmationMessage({ message: `Goodbye, ${employee?.name}! You are now clocked out.`, type: 'out'});
     setCurrentView('CONFIRMATION');
   };
 
   const handleStartBreak = (employeeId: string) => {
-    const lastRecordIndex = timeRecords.slice().reverse().findIndex(
-      (r) => r.employeeId === employeeId && !r.clockOut
-    );
+    const activeRecord = timeRecords
+        .slice()
+        .reverse()
+        .find(r => r.employeeId === employeeId && !r.clockOut);
   
-    if (lastRecordIndex !== -1) {
-      const originalIndex = timeRecords.length - 1 - lastRecordIndex;
-      const updatedRecords = [...timeRecords];
-      const recordToUpdate = { ...updatedRecords[originalIndex] };
-  
-      if (!recordToUpdate.breaks) {
-        recordToUpdate.breaks = [];
-      }
-  
-      const hasActiveBreak = recordToUpdate.breaks.some(b => !b.end);
+    if (activeRecord) {
+      const breaks = activeRecord.breaks || [];
+      const hasActiveBreak = breaks.some(b => !b.end);
       if (!hasActiveBreak) {
-        recordToUpdate.breaks.push({ start: new Date() });
-        updatedRecords[originalIndex] = recordToUpdate;
-        setTimeRecords(updatedRecords);
+          actions.updateTimeRecord({
+              ...activeRecord,
+              breaks: [...breaks, { start: new Date() }]
+          });
       }
     }
   };
   
   const handleEndBreak = (employeeId: string) => {
-    const lastRecordIndex = timeRecords.slice().reverse().findIndex(
-      (r) => r.employeeId === employeeId && !r.clockOut
-    );
+    const activeRecord = timeRecords
+        .slice()
+        .reverse()
+        .find(r => r.employeeId === employeeId && !r.clockOut);
   
-    if (lastRecordIndex !== -1) {
-      const originalIndex = timeRecords.length - 1 - lastRecordIndex;
-      const updatedRecords = [...timeRecords];
-      const recordToUpdate = { ...updatedRecords[originalIndex] };
-      const activeBreakIndex = recordToUpdate.breaks?.findIndex(b => !b.end);
-  
-      if (recordToUpdate.breaks && activeBreakIndex !== -1 && activeBreakIndex !== undefined) {
-        recordToUpdate.breaks[activeBreakIndex].end = new Date();
-        updatedRecords[originalIndex] = recordToUpdate;
-        setTimeRecords(updatedRecords);
-      }
+    if (activeRecord) {
+        const breaks = activeRecord.breaks || [];
+        const activeBreakIndex = breaks.findIndex(b => !b.end);
+        if (activeBreakIndex !== -1) {
+            const updatedBreaks = [...breaks];
+            updatedBreaks[activeBreakIndex].end = new Date();
+            actions.updateTimeRecord({
+                ...activeRecord,
+                breaks: updatedBreaks
+            });
+        }
     }
   };
   
@@ -282,48 +267,22 @@ const App: React.FC = () => {
     setConfirmationMessage(null);
   };
 
-  const handleAddEmployee = (newEmployee: Employee) => {
-    setEmployees([...employees, { ...newEmployee, archived: false }]);
-  };
-
-  const handleUpdateEmployee = (updatedEmployee: Employee) => {
-    setEmployees(employees.map(e => e.id === updatedEmployee.id ? updatedEmployee : e));
-  };
-  
-  const handleArchiveEmployee = (employeeId: string) => {
-    setEmployees(employees.map(e => e.id === employeeId ? { ...e, archived: true } : e));
-  };
-
-  const handleUnarchiveEmployee = (employeeId: string) => {
-    setEmployees(employees.map(e => e.id === employeeId ? { ...e, archived: false } : e));
-  };
-  
-  const handleDeleteEmployeePermanently = (employeeId: string) => {
-    setEmployees(employees.filter(e => e.id !== employeeId));
-    setTimeRecords(timeRecords.filter(r => r.employeeId !== employeeId));
-  };
-  
-  const handleUpdateTimeRecord = (updatedRecord: TimeRecord) => {
-    setTimeRecords(timeRecords.map(r => r.id === updatedRecord.id ? updatedRecord : r));
-  }
-  
-  const handleDeleteTimeRecord = (recordId: string) => {
-    setTimeRecords(timeRecords.filter(r => r.id !== recordId));
-  }
-
-  const handleAddTimeRecord = (recordData: Omit<TimeRecord, 'id' | 'locationId'>) => {
-    const newRecord: TimeRecord = { ...recordData, id: `rec-${Date.now()}`, locationId: selectedLocation };
-    setTimeRecords([...timeRecords, newRecord]);
-  };
-  
   const viewEmployeeTimecard = (employee: Employee, returnView: View) => {
     clearStatusTimeout();
     setIdentifiedEmployee(employee);
-    // Ensure we start on the correct week boundary according to settings
     setTimecardWeekStart(getWeekStart(new Date(), settings.weekStartDay));
     setTimecardReturnView(returnView);
     setCurrentView('EMPLOYEE_TIMECARD');
   };
+
+  if (loading) {
+      return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4 mx-auto"></div>
+            <p>Initializing Secure Database...</p>
+          </div>
+      </div>;
+  }
 
   const renderContent = () => {
     switch (currentView) {
@@ -332,15 +291,17 @@ const App: React.FC = () => {
           employees={employees} timeRecords={timeRecords} locations={locations}
           departments={departments} settings={settings}
           onLogout={resetToHome}
-          onAddEmployee={handleAddEmployee} onUpdateEmployee={handleUpdateEmployee}
-          onArchiveEmployee={handleArchiveEmployee} onUnarchiveEmployee={handleUnarchiveEmployee}
-          onDeleteEmployeePermanently={handleDeleteEmployeePermanently}
-          onUpdateTimeRecord={handleUpdateTimeRecord}
-          onDeleteTimeRecord={handleDeleteTimeRecord}
-          onAddTimeRecord={handleAddTimeRecord}
-          onUpdateLocations={setLocations}
-          onUpdateDepartments={setDepartments}
-          onUpdateSettings={setSettings}
+          onAddEmployee={(emp) => actions.addEmployee(emp)} 
+          onUpdateEmployee={(emp) => actions.updateEmployee(emp)}
+          onArchiveEmployee={(id) => actions.archiveEmployee(id)} 
+          onUnarchiveEmployee={(id) => actions.unarchiveEmployee(id)}
+          onDeleteEmployeePermanently={(id) => actions.deleteEmployeePermanently(id)}
+          onUpdateTimeRecord={(rec) => actions.updateTimeRecord(rec)}
+          onDeleteTimeRecord={(id) => actions.deleteTimeRecord(id)}
+          onAddTimeRecord={(rec) => actions.addTimeRecord({...rec, locationId: selectedLocation})}
+          onUpdateLocations={(locs) => actions.updateLocations(locs)}
+          onUpdateDepartments={(deps) => actions.updateDepartments(deps)}
+          onUpdateSettings={(sets) => actions.updateSettings(sets)}
         />;
       
       case 'PIN_SELECTION':
