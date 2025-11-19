@@ -1,4 +1,3 @@
-
 import { 
     createRxDatabase, 
     RxDatabase, 
@@ -14,6 +13,8 @@ import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
+// Fix: Use default import for crypto-js
+import CryptoJS from 'crypto-js';
 import * as schemas from './schemas';
 
 // --- Plugins ---
@@ -67,7 +68,12 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
         storage: getStorage(),
         password: 'my-secret-encryption-password',
         multiInstance: !isCapacitor,
-        ignoreDuplicate: true
+        ignoreDuplicate: true,
+        // Fix for non-secure contexts (HTTP/IP access):
+        // Use crypto-js instead of Native Web Crypto API which requires HTTPS
+        hashFunction: (input: string) => {
+            return Promise.resolve(CryptoJS.SHA256(input).toString());
+        }
     });
 
     // Check if collections exist before adding (safe for re-runs)
