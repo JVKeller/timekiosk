@@ -1,4 +1,5 @@
-import React, { useMemo, useState, useEffect } from 'react';
+
+import React, { useMemo } from 'react';
 import type { Employee, TimeRecord, Location, AppSettings } from '../../types';
 import { calculateDuration, getWeekStart, formatShortDuration } from '../../utils';
 import PlusIcon from '../icons/PlusIcon';
@@ -31,13 +32,16 @@ const TimecardView: React.FC<TimecardViewProps> = ({
     onShowQrCode, settings
 }) => {
 
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
+    // 1. Memoize the filtered records so the reference stays stable across renders
+    const employeeRecordsThisWeek = useMemo(() => {
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 7);
 
-    const employeeRecordsThisWeek = timeRecords.filter(r => {
-        const clockInDate = new Date(r.clockIn);
-        return r.employeeId === employee.id && clockInDate >= weekStart && clockInDate < weekEnd;
-    }).sort((a,b) => new Date(a.clockIn).getTime() - new Date(b.clockIn).getTime());
+        return timeRecords.filter(r => {
+            const clockInDate = new Date(r.clockIn);
+            return r.employeeId === employee.id && clockInDate >= weekStart && clockInDate < weekEnd;
+        }).sort((a,b) => new Date(a.clockIn).getTime() - new Date(b.clockIn).getTime());
+    }, [timeRecords, employee.id, weekStart]);
     
     const recordsByDay = useMemo(() => {
         return employeeRecordsThisWeek.reduce((acc, record) => {
@@ -48,16 +52,17 @@ const TimecardView: React.FC<TimecardViewProps> = ({
         }, {} as Record<string, TimeRecord[]>);
     }, [employeeRecordsThisWeek]);
 
-    const [manualLunchDeductions, setManualLunchDeductions] = useState<Record<string, boolean>>({});
-
-    useEffect(() => {
-        const initialDeductions: Record<string, boolean> = {};
+    // 2. FIX: Convert manualLunchDeductions to a pure derived value using useMemo.
+    // This removes the need for useState/useEffect and prevents the infinite update loop.
+    const manualLunchDeductions = useMemo(() => {
+        const deductions: Record<string, boolean> = {};
         Object.keys(recordsByDay).forEach(dayKey => {
             const dailyDuration = recordsByDay[dayKey].reduce((sum, rec) => sum + calculateDuration(rec).totalMs, 0);
-            initialDeductions[dayKey] = employee.autoDeductLunch && dailyDuration > 8 * 60 * 60 * 1000;
+            // Auto deduct if enabled AND duration > 8 hours
+            deductions[dayKey] = !!employee.autoDeductLunch && dailyDuration > 8 * 60 * 60 * 1000;
         });
-        setManualLunchDeductions(initialDeductions);
-    }, [employeeRecordsThisWeek, employee.autoDeductLunch]);
+        return deductions;
+    }, [recordsByDay, employee.autoDeductLunch]);
     
     const calculateDailyTotalMs = (dailyRecords: TimeRecord[], dayKey: string) => {
         const totalMs = dailyRecords.reduce((sum, rec) => sum + calculateDuration(rec).totalMs, 0);

@@ -1,8 +1,12 @@
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
 const express = require('express');
 const PouchDB = require('pouchdb');
 const ExpressPouchDB = require('express-pouchdb');
 const cors = require('cors');
 const fs = require('fs');
+const os = require('os');
 
 // Ensure the data directory exists
 if (!fs.existsSync('./db-data')) {
@@ -35,8 +39,7 @@ const HOST = '0.0.0.0'; // Listen on all network interfaces
 
 app.listen(PORT, HOST, () => {
     // Get local IP address for convenience
-    const { networkInterfaces } = require('os');
-    const nets = networkInterfaces();
+    const nets = os.networkInterfaces();
     let ip = 'localhost';
 
     for (const name of Object.keys(nets)) {
