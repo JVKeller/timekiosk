@@ -1,4 +1,3 @@
-
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
@@ -21,17 +20,21 @@ const InNodePouchDB = PouchDB.defaults({
 const app = express();
 
 // MANUAL CORS MIDDLEWARE
-// This is required because PouchDB Sync uses specific headers and credentials.
-// When credentials=true, Origin cannot be '*'.
+// Standard: If Credentials are true, Origin MUST be exact (not *).
 app.use((req, res, next) => {
-    const origin = req.headers.origin || req.headers.host;
+    const origin = req.headers.origin;
     
-    // Allow the specific origin that is requesting
     if (origin) {
-        res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+        // If the client sends an Origin, we reflect it back.
+        // This allows the browser to accept the response with credentials.
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+    } else {
+        // If no Origin (e.g. server-to-server), we can default to * 
+        // BUT we must NOT set credentials to true in this case to remain valid.
+        res.setHeader('Access-Control-Allow-Origin', '*');
     }
     
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin, Range');
     
