@@ -1,27 +1,39 @@
 {
-  "name": "timekiosk",
+  "name": "time-kiosk",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "sync-server": "node sync-server.js"
   },
   "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "rxdb": "^15.18.0",
+    "rxjs": "^7.8.1",
+    "crypto-js": "^4.2.0",
     "html5-qrcode": "^2.3.8",
     "qrcode": "^1.5.3",
-    "rxdb": "^16.20.0",
-    "crypto-js": "^4.2.0",
-    "module": "^2.0.0",
-    "rxjs": "^7.8.2"
+    "express": "^4.18.2",
+    "pouchdb": "^8.0.1",
+    "express-pouchdb": "^4.2.0",
+    "pouchdb-adapter-leveldb": "^8.0.1",
+    "pouchdb-adapter-http": "^8.0.1",
+    "pouchdb-server": "^4.2.0",
+    "cors": "^2.8.5"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@types/crypto-js": "^4.2.2",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0"
   }
 }
