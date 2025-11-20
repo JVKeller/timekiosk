@@ -1,3 +1,4 @@
+
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
@@ -21,11 +22,14 @@ const InNodePouchDB = PouchDB.defaults({
 const app = express();
 
 // Fix: Maximal permissive CORS for local network sync
+// We use a function for origin to dynamically allow the requesting origin
 app.use(cors({
-    origin: true, // Reflect request origin
+    origin: (origin, callback) => {
+        callback(null, true); 
+    },
     credentials: true,
-    methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
-    allowedHeaders: "Content-Type, Authorization, Content-Length, X-Requested-With, Accept"
+    methods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 // Explicitly handle OPTIONS preflight for all routes

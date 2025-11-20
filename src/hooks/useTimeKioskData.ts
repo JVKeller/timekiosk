@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { getDatabase, TimeKioskDatabase } from '../db';
+import { getDatabase, TimeKioskDatabase, syncStatus$ } from '../db';
 import type { Employee, TimeRecord, Location, Department, AppSettings } from '../types';
 import { useMockData } from './useMockData';
 
@@ -14,7 +14,7 @@ export const useTimeKioskData = () => {
     const [settings, setSettings] = useState<AppSettings>({ weekStartDay: 0, logoUrl: '', remoteDbUrl: '' });
     const [loading, setLoading] = useState(true);
 
-    // Added syncState
+    // Granular Sync State
     const [syncState, setSyncState] = useState<{ connected: boolean; lastSyncTime: Date | null; error: string | null }>({
         connected: false,
         lastSyncTime: null,
@@ -49,6 +49,17 @@ export const useTimeKioskData = () => {
             }
         };
         init();
+
+        // Subscribe to global sync status
+        const sub = syncStatus$.subscribe(statusObj => {
+            setSyncState(prev => ({
+                connected: statusObj.status === 'connected',
+                lastSyncTime: statusObj.status === 'connected' ? new Date() : prev.lastSyncTime,
+                error: statusObj.status === 'error' ? (statusObj.error || 'Connection Error') : null
+            }));
+        });
+        
+        return () => sub.unsubscribe();
     }, []);
 
     useEffect(() => {
@@ -90,6 +101,15 @@ export const useTimeKioskData = () => {
                     weekStartDay: s.weekStartDay,
                     remoteDbUrl: s.remoteDbUrl 
                 });
+                
+                // Initialize Sync ONLY if settings load with a URL and it's the first load
+                // We don't want to trigger this on every settings update from other sources,
+                // but we need to ensure we connect on app startup.
+                // The simplest way is to let the explicit updateSettings trigger it, 
+                // but for startup we can check if we are disconnected.
+                if (s.remoteDbUrl && syncStatus$.value.status === 'disconnected') {
+                     (db as any).sync(s.remoteDbUrl);
+                }
             }
         });
 
@@ -104,42 +124,11 @@ export const useTimeKioskData = () => {
         };
     }, [db]);
 
-    // Automatically trigger sync when the remote URL changes in settings
-    useEffect(() => {
-        if (db && settings.remoteDbUrl) {
-            (db as any).sync(settings.remoteDbUrl);
-            // Set mock connected state
-            setSyncState({ connected: true, lastSyncTime: new Date(), error: null });
-        } else {
-            setSyncState({ connected: false, lastSyncTime: null, error: null });
-        }
-    }, [db, settings.remoteDbUrl]);
-
-    const addEmployee = async (emp: Employee) => {
-        await db?.employees.insert(emp);
-    };
-
-    const updateEmployee = async (emp: Employee) => {
-        const doc = await db?.employees.findOne(emp.id).exec();
-        if (doc) await doc.patch(emp);
-    };
-
-    const archiveEmployee = async (id: string) => {
-        const doc = await db?.employees.findOne(id).exec();
-        await doc?.patch({ archived: true });
-    };
-
-    const unarchiveEmployee = async (id: string) => {
-        const doc = await db?.employees.findOne(id).exec();
-        await doc?.patch({ archived: false });
-    };
-    
-    const deleteEmployeePermanently = async (id: string) => {
-        const doc = await db?.employees.findOne(id).exec();
-        await doc?.remove();
-        const records = await db?.timerecords.find({ selector: { employeeId: id } }).exec();
-        if (records) await Promise.all(records.map(r => r.remove()));
-    };
+    const addEmployee = async (emp: Employee) => { await db?.employees.insert(emp); };
+    const updateEmployee = async (emp: Employee) => { const doc = await db?.employees.findOne(emp.id).exec(); if (doc) await doc.patch(emp); };
+    const archiveEmployee = async (id: string) => { const doc = await db?.employees.findOne(id).exec(); await doc?.patch({ archived: true }); };
+    const unarchiveEmployee = async (id: string) => { const doc = await db?.employees.findOne(id).exec(); await doc?.patch({ archived: false }); };
+    const deleteEmployeePermanently = async (id: string) => { const doc = await db?.employees.findOne(id).exec(); await doc?.remove(); const records = await db?.timerecords.find({ selector: { employeeId: id } }).exec(); if (records) await Promise.all(records.map(r => r.remove())); };
 
     const addTimeRecord = async (record: Omit<TimeRecord, 'id'|'locationId'> & {locationId: string}) => {
         const newRecord = {
@@ -167,24 +156,15 @@ export const useTimeKioskData = () => {
         }
     };
     
-    const deleteTimeRecord = async (id: string) => {
-        const doc = await db?.timerecords.findOne(id).exec();
-        await doc?.remove();
-    };
+    const deleteTimeRecord = async (id: string) => { const doc = await db?.timerecords.findOne(id).exec(); await doc?.remove(); };
 
     const updateLocations = async (newLocations: Location[]) => {
         if (!db) return;
         const currentIds = locations.map(l => l.id);
         const newIds = newLocations.map(l => l.id);
         const toDelete = currentIds.filter(id => !newIds.includes(id));
-        
-        for (const id of toDelete) {
-            const doc = await db.locations.findOne(id).exec();
-            await doc?.remove();
-        }
-        for (const loc of newLocations) {
-            await db.locations.upsert(loc);
-        }
+        for (const id of toDelete) { const doc = await db.locations.findOne(id).exec(); await doc?.remove(); }
+        for (const loc of newLocations) { await db.locations.upsert(loc); }
     };
 
     const updateDepartments = async (newDepartments: Department[]) => {
@@ -192,57 +172,36 @@ export const useTimeKioskData = () => {
         const currentIds = departments.map(l => l.id);
         const newIds = newDepartments.map(l => l.id);
         const toDelete = currentIds.filter(id => !newIds.includes(id));
-        
-        for (const id of toDelete) {
-            const doc = await db.departments.findOne(id).exec();
-            await doc?.remove();
-        }
-        for (const dep of newDepartments) {
-            await db.departments.upsert(dep);
-        }
+        for (const id of toDelete) { const doc = await db.departments.findOne(id).exec(); await doc?.remove(); }
+        for (const dep of newDepartments) { await db.departments.upsert(dep); }
     };
 
     const updateSettings = async (newSettings: AppSettings) => {
         await db?.settings.upsert({ id: 'GLOBAL_SETTINGS', ...newSettings });
+        // Trigger sync explicitly when settings are saved
+        if (db && newSettings.remoteDbUrl) {
+            (db as any).sync(newSettings.remoteDbUrl);
+        }
     };
 
-    // Exposed manual sync if needed, but useEffect handles it mostly
     const sync = (url: string) => {
         if(db && (db as any).sync) {
             (db as any).sync(url);
         }
     }
 
-    // Added wipeDatabase function
     const wipeDatabase = async () => {
-        if (db) {
-            await db.remove();
-            window.location.reload();
+        if (db && (db as any).wipe) {
+            (db as any).wipe();
         }
     };
 
     return {
-        employees,
-        timeRecords,
-        locations,
-        departments,
-        settings,
-        loading,
-        syncState, // Exposed syncState
+        employees, timeRecords, locations, departments, settings, loading, syncState,
         actions: {
-            addEmployee,
-            updateEmployee,
-            archiveEmployee,
-            unarchiveEmployee,
-            deleteEmployeePermanently,
-            addTimeRecord,
-            updateTimeRecord,
-            deleteTimeRecord,
-            updateLocations,
-            updateDepartments,
-            updateSettings,
-            sync,
-            wipeDatabase // Exposed wipeDatabase
+            addEmployee, updateEmployee, archiveEmployee, unarchiveEmployee, deleteEmployeePermanently,
+            addTimeRecord, updateTimeRecord, deleteTimeRecord, updateLocations, updateDepartments, updateSettings,
+            sync, wipeDatabase
         }
     };
 };

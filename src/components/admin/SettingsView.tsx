@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Location, Department, AppSettings } from '../../types';
 import PlusIcon from '../icons/PlusIcon';
 import TrashIcon from '../icons/TrashIcon';
@@ -13,16 +13,25 @@ interface SettingsViewProps {
     onUpdateLocations: (locations: Location[]) => void;
     onUpdateDepartments: (departments: Department[]) => void;
     onWipeDatabase: () => void;
+    syncState?: { connected: boolean; error: string | null };
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({ 
     locations, departments, settings, 
-    onUpdateSettings, onUpdateLocations, onUpdateDepartments, onWipeDatabase 
+    onUpdateSettings, onUpdateLocations, onUpdateDepartments, onWipeDatabase,
+    syncState
 }) => {
     const [newLocation, setNewLocation] = useState({ name: '', abbreviation: '' });
     const [newDepartment, setNewDepartment] = useState('');
+    
+    // Local state for sync URL to prevent auto-saving on keystroke
+    const [localSyncUrl, setLocalSyncUrl] = useState(settings.remoteDbUrl || '');
 
-    // Logo Settings
+    // Sync local state with prop when prop changes (initial load)
+    useEffect(() => {
+        setLocalSyncUrl(settings.remoteDbUrl || '');
+    }, [settings.remoteDbUrl]);
+
     const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         onUpdateSettings({ ...settings, logoUrl: e.target.value });
     };
@@ -38,17 +47,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         }
     };
     
-    // Week Start Settings
     const handleWeekStartChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         onUpdateSettings({ ...settings, weekStartDay: parseInt(e.target.value) });
     };
 
-    // Database Sync Settings
+    // Handle Sync URL Change - just update local state
     const handleSyncUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        onUpdateSettings({ ...settings, remoteDbUrl: e.target.value });
+        setLocalSyncUrl(e.target.value);
     };
 
-    // Location Management
+    // Apply Sync Settings
+    const applySyncSettings = () => {
+        onUpdateSettings({ ...settings, remoteDbUrl: localSyncUrl });
+    };
+
     const handleAddLocation = (e: React.FormEvent) => {
         e.preventDefault();
         if (newLocation.name && newLocation.abbreviation) {
@@ -63,7 +75,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         }
     };
 
-    // Department Management
     const handleAddDepartment = (e: React.FormEvent) => {
         e.preventDefault();
         if (newDepartment) {
@@ -150,8 +161,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             </section>
 
              {/* Database Sync Settings */}
-             <section className="bg-slate-800 p-6 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-bold text-teal-400 mb-4">Data Synchronization</h2>
+             <section className="bg-slate-800 p-6 rounded-lg shadow-lg border border-slate-700">
+                <h2 className="text-2xl font-bold text-teal-400 mb-4 flex items-center justify-between">
+                    Data Synchronization
+                    <span className={`text-sm px-3 py-1 rounded-full uppercase tracking-wider font-bold ${
+                        syncState?.connected ? 'bg-green-900 text-green-400 border border-green-700' :
+                        syncState?.error ? 'bg-red-900 text-red-400 border border-red-700' :
+                        'bg-slate-700 text-slate-400'
+                    }`}>
+                        {syncState?.connected ? 'Online' : syncState?.error ? 'Error' : 'Offline'}
+                    </span>
+                </h2>
                 <div className="space-y-6">
                     <div className="bg-slate-900 p-4 rounded border border-slate-700">
                         <p className="text-sm text-slate-300 mb-2">
@@ -162,17 +182,30 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                         </code>
                         <label className="block mb-2 font-semibold">Remote Server URL</label>
                         <p className="text-xs text-slate-400 mb-2">
-                            Enter the URL displayed by the sync server.<br/>
                             Format: <code>http://IP_ADDRESS:5984/db</code>
                         </p>
-                        <input 
-                            type="text" 
-                            placeholder="http://192.168.1.50:5984/db" 
-                            value={settings.remoteDbUrl || ''} 
-                            onChange={handleSyncUrlChange}
-                            className="w-full p-3 bg-slate-700 rounded-lg text-white border border-slate-600 focus:border-teal-500 focus:outline-none font-mono text-sm"
-                        />
-                        {settings.remoteDbUrl && (
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                placeholder="http://192.168.1.50:5984/db" 
+                                value={localSyncUrl} 
+                                onChange={handleSyncUrlChange}
+                                className="flex-1 p-3 bg-slate-700 rounded-lg text-white border border-slate-600 focus:border-teal-500 focus:outline-none font-mono text-sm"
+                            />
+                            <button 
+                                onClick={applySyncSettings}
+                                className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-6 rounded-lg transition"
+                            >
+                                Apply
+                            </button>
+                        </div>
+                        
+                        {syncState?.error && (
+                            <p className="mt-2 text-red-400 text-sm font-mono">
+                                {syncState.error}
+                            </p>
+                        )}
+                         {syncState?.connected && (
                             <div className="mt-2 flex items-center gap-2">
                                 <span className="flex h-3 w-3 relative">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -182,9 +215,28 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                             </div>
                         )}
                     </div>
+                    
+                    {onWipeDatabase && (
+                        <div className="pt-4 border-t border-slate-700">
+                            <h3 className="text-lg font-bold text-red-400 mb-2">Danger Zone</h3>
+                            <p className="text-slate-400 text-sm mb-4">
+                                Use this if you want to clear the local mock data and pull fresh data from the server.
+                            </p>
+                            <button 
+                                onClick={() => {
+                                    if(window.confirm("WARNING: This will delete ALL local data. Are you sure?")) {
+                                        onWipeDatabase();
+                                    }
+                                }}
+                                className="bg-red-900/50 hover:bg-red-900 text-red-200 border border-red-700 px-4 py-2 rounded-lg transition flex items-center gap-2"
+                            >
+                                <TrashIcon className="w-5 h-5"/> Wipe Local Data & Reset
+                            </button>
+                        </div>
+                    )}
                 </div>
             </section>
-
+            
             {/* Locations Settings */}
             <section className="bg-slate-800 p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-bold text-teal-400 mb-4">Locations</h2>
@@ -285,27 +337,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                             ))}
                         </tbody>
                     </table>
-                </div>
-            </section>
-
-            {/* Danger Zone */}
-            <section className="bg-red-900/20 p-6 rounded-lg shadow-lg border border-red-900/50">
-                <h2 className="text-2xl font-bold text-red-400 mb-4">Danger Zone</h2>
-                <div className="flex justify-between items-center">
-                    <div>
-                        <p className="font-semibold text-white">Wipe Database</p>
-                        <p className="text-sm text-slate-400">Permanently delete all local data. Only use if data is corrupted or for a hard reset.</p>
-                    </div>
-                    <button 
-                        onClick={() => {
-                            if(window.confirm("WARNING: This will delete ALL local data. Are you sure?")) {
-                                onWipeDatabase();
-                            }
-                        }} 
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold transition"
-                    >
-                        Wipe Data
-                    </button>
                 </div>
             </section>
         </div>

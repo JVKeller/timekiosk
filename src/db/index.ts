@@ -1,3 +1,4 @@
+
 import { 
     createRxDatabase, 
     RxDatabase, 
@@ -15,11 +16,12 @@ import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBDevModePlugin, disableWarnings } from 'rxdb/plugins/dev-mode';
 import CryptoJS from 'crypto-js';
+import { BehaviorSubject } from 'rxjs';
 import * as schemas from './schemas';
 
 // --- Plugins ---
 addRxPlugin(RxDBDevModePlugin);
-disableWarnings(); // Silence verbose dev-mode warnings
+disableWarnings(); 
 
 addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
@@ -37,6 +39,8 @@ export type TimeKioskCollections = {
 export type TimeKioskDatabase = RxDatabase<TimeKioskCollections>;
 
 const activeReplications: RxCouchDBReplicationState<any>[] = [];
+// Global status observable
+export const syncStatus$ = new BehaviorSubject<{ status: 'disconnected'|'connecting'|'connected'|'error', error?: string }>({ status: 'disconnected' });
 
 const isNode = typeof window === 'undefined';
 const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
@@ -88,13 +92,17 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
     }
 
     (db as any).sync = async (remoteUrl: string) => {
-        if (!remoteUrl) return;
-
-        console.log(`Initializing Sync with: ${remoteUrl}`);
-
-        // 1. Cancel existing replications
+        // Disconnect existing
         await Promise.all(activeReplications.map(rep => rep.cancel()));
         activeReplications.length = 0;
+
+        if (!remoteUrl) {
+            syncStatus$.next({ status: 'disconnected' });
+            return;
+        }
+
+        console.log(`Initializing Sync with: ${remoteUrl}`);
+        syncStatus$.next({ status: 'connecting' });
 
         const collectionNames: (keyof TimeKioskCollections)[] = [
             'employees', 'timerecords', 'locations', 'departments', 'settings'
@@ -102,6 +110,8 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
         
         // Ensure clean base URL without trailing slash for processing
         const baseUrl = remoteUrl.replace(/\/+$/, '');
+
+        let activeCount = 0;
 
         collectionNames.forEach(colName => {
             const collection = db.collections[colName];
@@ -125,11 +135,32 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
                 
                 replicationState.error$.subscribe(err => {
                     console.error(`Replication error (${colName}):`, err);
+                    // Only report error if we aren't already connected/connecting elsewhere
+                    if (syncStatus$.value.status !== 'connected') {
+                         syncStatus$.next({ status: 'error', error: err.message || 'Connection Failed' });
+                    }
                 });
 
+                // If we receive data, consider it connected
+                replicationState.received$.subscribe(() => {
+                     if (syncStatus$.value.status !== 'connected') {
+                        syncStatus$.next({ status: 'connected' });
+                     }
+                });
+
+                activeCount++;
                 activeReplications.push(replicationState);
             }
         });
+
+        if(activeCount > 0) {
+             // Assume connected after a short delay if no errors occur immediately
+             setTimeout(() => {
+                 if (syncStatus$.value.status === 'connecting') {
+                     syncStatus$.next({ status: 'connected' });
+                 }
+             }, 3000);
+        }
     };
 
     // Expose wipe function
