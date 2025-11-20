@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { Location, Department, AppSettings } from '../../types';
 import PlusIcon from '../icons/PlusIcon';
@@ -11,11 +12,12 @@ interface SettingsViewProps {
     onUpdateSettings: (settings: AppSettings) => void;
     onUpdateLocations: (locations: Location[]) => void;
     onUpdateDepartments: (departments: Department[]) => void;
+    onWipeDatabase: () => void;
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({ 
     locations, departments, settings, 
-    onUpdateSettings, onUpdateLocations, onUpdateDepartments 
+    onUpdateSettings, onUpdateLocations, onUpdateDepartments, onWipeDatabase 
 }) => {
     const [newLocation, setNewLocation] = useState({ name: '', abbreviation: '' });
     const [newDepartment, setNewDepartment] = useState('');
@@ -283,6 +285,27 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                             ))}
                         </tbody>
                     </table>
+                </div>
+            </section>
+
+            {/* Danger Zone */}
+            <section className="bg-red-900/20 p-6 rounded-lg shadow-lg border border-red-900/50">
+                <h2 className="text-2xl font-bold text-red-400 mb-4">Danger Zone</h2>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <p className="font-semibold text-white">Wipe Database</p>
+                        <p className="text-sm text-slate-400">Permanently delete all local data. Only use if data is corrupted or for a hard reset.</p>
+                    </div>
+                    <button 
+                        onClick={() => {
+                            if(window.confirm("WARNING: This will delete ALL local data. Are you sure?")) {
+                                onWipeDatabase();
+                            }
+                        }} 
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold transition"
+                    >
+                        Wipe Data
+                    </button>
                 </div>
             </section>
         </div>

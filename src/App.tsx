@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import type { Employee, TimeRecord, View } from './types';
 import { useTimeKioskData } from './hooks/useTimeKioskData';
@@ -28,6 +27,7 @@ const App: React.FC = () => {
       departments, 
       settings,
       loading,
+      syncState, // Added destructuring here
       actions 
   } = useTimeKioskData();
   
@@ -316,6 +316,9 @@ const App: React.FC = () => {
           onUpdateLocations={(locs) => actions.updateLocations(locs)}
           onUpdateDepartments={(deps) => actions.updateDepartments(deps)}
           onUpdateSettings={(sets) => actions.updateSettings(sets)}
+          // Pass new props
+          syncState={syncState}
+          onWipeDatabase={actions.wipeDatabase}
         />;
       
       case 'PIN_SELECTION':

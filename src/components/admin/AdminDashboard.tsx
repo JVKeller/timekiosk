@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { Employee, Location, TimeRecord, Department, AppSettings } from '../../types';
 import { getWeekStart, calculateDuration, formatDateTimeForInput, parseDateTimeInput, formatShortDuration } from '../../utils';
@@ -39,13 +40,15 @@ interface AdminDashboardProps {
     onUpdateLocations: (locations: Location[]) => void;
     onUpdateDepartments: (departments: Department[]) => void;
     onUpdateSettings: (settings: AppSettings) => void;
+    syncState: { connected: boolean; lastSyncTime: Date | null; error: string | null };
+    onWipeDatabase: () => void;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
     employees, timeRecords, locations, departments, settings, onLogout, 
     onUpdateEmployee, onAddEmployee, onArchiveEmployee, onUnarchiveEmployee, 
     onDeleteEmployeePermanently, onUpdateTimeRecord, onDeleteTimeRecord, onAddTimeRecord,
-    onUpdateLocations, onUpdateDepartments, onUpdateSettings
+    onUpdateLocations, onUpdateDepartments, onUpdateSettings, syncState, onWipeDatabase
 }) => {
   const [activeTab, setActiveTab] = useState('employees');
   
@@ -692,6 +695,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   onUpdateSettings={onUpdateSettings}
                   onUpdateLocations={onUpdateLocations}
                   onUpdateDepartments={onUpdateDepartments}
+                  onWipeDatabase={onWipeDatabase}
               />
           )}
       </main>

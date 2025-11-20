@@ -14,6 +14,13 @@ export const useTimeKioskData = () => {
     const [settings, setSettings] = useState<AppSettings>({ weekStartDay: 0, logoUrl: '', remoteDbUrl: '' });
     const [loading, setLoading] = useState(true);
 
+    // Added syncState
+    const [syncState, setSyncState] = useState<{ connected: boolean; lastSyncTime: Date | null; error: string | null }>({
+        connected: false,
+        lastSyncTime: null,
+        error: null
+    });
+
     const seedData = useMockData();
 
     useEffect(() => {
@@ -101,6 +108,10 @@ export const useTimeKioskData = () => {
     useEffect(() => {
         if (db && settings.remoteDbUrl) {
             (db as any).sync(settings.remoteDbUrl);
+            // Set mock connected state
+            setSyncState({ connected: true, lastSyncTime: new Date(), error: null });
+        } else {
+            setSyncState({ connected: false, lastSyncTime: null, error: null });
         }
     }, [db, settings.remoteDbUrl]);
 
@@ -202,6 +213,14 @@ export const useTimeKioskData = () => {
         }
     }
 
+    // Added wipeDatabase function
+    const wipeDatabase = async () => {
+        if (db) {
+            await db.remove();
+            window.location.reload();
+        }
+    };
+
     return {
         employees,
         timeRecords,
@@ -209,6 +228,7 @@ export const useTimeKioskData = () => {
         departments,
         settings,
         loading,
+        syncState, // Exposed syncState
         actions: {
             addEmployee,
             updateEmployee,
@@ -221,7 +241,8 @@ export const useTimeKioskData = () => {
             updateLocations,
             updateDepartments,
             updateSettings,
-            sync
+            sync,
+            wipeDatabase // Exposed wipeDatabase
         }
     };
 };
