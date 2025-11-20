@@ -20,11 +20,16 @@ const InNodePouchDB = PouchDB.defaults({
 
 const app = express();
 
-// Enable CORS so tablets on the network can talk to this server
+// Fix: Maximal permissive CORS for local network sync
 app.use(cors({
-    origin: true,
-    credentials: true
+    origin: true, // Reflect request origin
+    credentials: true,
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+    allowedHeaders: "Content-Type, Authorization, Content-Length, X-Requested-With, Accept"
 }));
+
+// Explicitly handle OPTIONS preflight for all routes
+app.options('*', cors());
 
 // Mount the PouchDB API (CouchDB compatible)
 app.use('/db', ExpressPouchDB(InNodePouchDB, {
