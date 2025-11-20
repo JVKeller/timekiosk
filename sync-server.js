@@ -5,7 +5,6 @@ const require = createRequire(import.meta.url);
 const express = require('express');
 const PouchDB = require('pouchdb');
 const ExpressPouchDB = require('express-pouchdb');
-const cors = require('cors');
 const fs = require('fs');
 const os = require('os');
 
@@ -21,19 +20,27 @@ const InNodePouchDB = PouchDB.defaults({
 
 const app = express();
 
-// Fix: Maximal permissive CORS for local network sync
-// We use a function for origin to dynamically allow the requesting origin
-app.use(cors({
-    origin: (origin, callback) => {
-        callback(null, true); 
-    },
-    credentials: true,
-    methods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With', 'Accept', 'Origin']
-}));
-
-// Explicitly handle OPTIONS preflight for all routes
-app.options('*', cors());
+// MANUAL CORS MIDDLEWARE
+// This is required because PouchDB Sync uses specific headers and credentials.
+// When credentials=true, Origin cannot be '*'.
+app.use((req, res, next) => {
+    const origin = req.headers.origin || req.headers.host;
+    
+    // Allow the specific origin that is requesting
+    if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    }
+    
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin, Range');
+    
+    // Handle Preflight
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
 
 // Mount the PouchDB API (CouchDB compatible)
 app.use('/db', ExpressPouchDB(InNodePouchDB, {
@@ -53,7 +60,6 @@ app.listen(PORT, HOST, () => {
 
     for (const name of Object.keys(nets)) {
         for (const net of nets[name]) {
-            // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
             if (net.family === 'IPv4' && !net.internal) {
                 ip = net.address;
             }

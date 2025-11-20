@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import type { Location, Department, AppSettings } from '../../types';
 import PlusIcon from '../icons/PlusIcon';
 import TrashIcon from '../icons/TrashIcon';
-import EditIcon from '../icons/EditIcon';
 
 interface SettingsViewProps {
     locations: Location[];
@@ -25,11 +24,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     const [newDepartment, setNewDepartment] = useState('');
     
     // Local state for sync URL to prevent auto-saving on keystroke
-    const [localSyncUrl, setLocalSyncUrl] = useState(settings.remoteDbUrl || '');
+    const [localSyncUrl, setLocalSyncUrl] = useState('');
 
-    // Sync local state with prop when prop changes (initial load)
+    // Only update local state from props when the component mounts 
+    // or if the settings change externally (not while user is typing)
     useEffect(() => {
-        setLocalSyncUrl(settings.remoteDbUrl || '');
+        if (settings.remoteDbUrl !== localSyncUrl) {
+            setLocalSyncUrl(settings.remoteDbUrl || '');
+        }
     }, [settings.remoteDbUrl]);
 
     const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,7 +58,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         setLocalSyncUrl(e.target.value);
     };
 
-    // Apply Sync Settings
+    // Apply Sync Settings - This is the ONLY place that updates the actual DB settings
     const applySyncSettings = () => {
         onUpdateSettings({ ...settings, remoteDbUrl: localSyncUrl });
     };
@@ -100,7 +102,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     <div>
                         <label className="block mb-2 font-semibold">Custom Logo</label>
                         <div className="flex flex-col gap-4">
-                            {/* URL Input */}
                             <div>
                                 <label className="block text-xs text-slate-400 mb-1">Image URL</label>
                                 <input 
@@ -112,7 +113,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                                 />
                             </div>
 
-                            {/* File Upload */}
                             <div>
                                 <label className="block text-xs text-slate-400 mb-1">Or Upload Image</label>
                                 <div className="flex flex-wrap items-center gap-3">
