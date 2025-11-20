@@ -1,21 +1,21 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { Employee, TimeRecord, View } from './types';
-import { useTimeKioskData } from './hooks/useTimeKioskData';
-import { getWeekStart } from './utils';
+import type { Employee, TimeRecord, View } from './src/types';
+import { useTimeKioskData } from './src/hooks/useTimeKioskData';
+import { getWeekStart } from './src/utils';
 
-import DigitalClock from './components/DigitalClock';
-import Scanner from './components/Scanner';
-import EmployeeStatus from './components/EmployeeStatus';
-import Keypad from './components/Keypad';
-import AdminDashboard from './components/admin/AdminDashboard';
-import AdminLogin from './components/admin/AdminLogin';
-import TimecardView from './components/admin/TimecardView';
-import TimerControl from './components/TimerControl';
-import QrCodeIcon from './components/icons/QrCodeIcon';
-import PinIcon from './components/icons/PinIcon';
-import AdminIcon from './components/icons/AdminIcon';
-import EmployeeImage from './components/EmployeeImage';
+import DigitalClock from './src/components/DigitalClock';
+import Scanner from './src/components/Scanner';
+import EmployeeStatus from './src/components/EmployeeStatus';
+import Keypad from './src/components/Keypad';
+import AdminDashboard from './src/components/admin/AdminDashboard';
+import AdminLogin from './src/components/admin/AdminLogin';
+import TimecardView from './src/components/admin/TimecardView';
+import TimerControl from './src/components/TimerControl';
+import QrCodeIcon from './src/components/icons/QrCodeIcon';
+import PinIcon from './src/components/icons/PinIcon';
+import AdminIcon from './src/components/icons/AdminIcon';
+import EmployeeImage from './src/components/EmployeeImage';
 
 const App: React.FC = () => {
   const { 
