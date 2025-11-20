@@ -19,28 +19,32 @@ const InNodePouchDB = PouchDB.defaults({
 
 const app = express();
 
-// MANUAL CORS MIDDLEWARE
-// Standard: If Credentials are true, Origin MUST be exact (not *).
+// ROBUST CORS MIDDLEWARE
+// PouchDB requires specific handling for Credentials and Preflight requests.
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     
+    // 1. Allow the specific origin requesting access
     if (origin) {
-        // If the client sends an Origin, we reflect it back.
-        // This allows the browser to accept the response with credentials.
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
     } else {
-        // If no Origin (e.g. server-to-server), we can default to * 
-        // BUT we must NOT set credentials to true in this case to remain valid.
+        // Fallback for server-to-server or non-browser tools (like Postman)
         res.setHeader('Access-Control-Allow-Origin', '*');
     }
     
-    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin, Range');
+    // 2. Allow all PouchDB/CouchDB methods
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, DELETE, OPTIONS, COPY');
     
-    // Handle Preflight
+    // 3. Allow all Headers PouchDB uses
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin, Range, If-Match, If-None-Match, Cache-Control');
+    
+    // 4. Expose ETag for sync consistency
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Authorization, ETag, Cache-Control');
+
+    // 5. Handle Preflight (OPTIONS)
     if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
+        return res.sendStatus(204); // 204 No Content is standard for Preflight success
     }
     next();
 });
