@@ -13,12 +13,14 @@ import { replicateCouchDB, RxCouchDBReplicationState } from 'rxdb/plugins/replic
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
-import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
+import { RxDBDevModePlugin, disableWarnings } from 'rxdb/plugins/dev-mode';
 import CryptoJS from 'crypto-js';
 import * as schemas from './schemas';
 
 // --- Plugins ---
 addRxPlugin(RxDBDevModePlugin);
+disableWarnings(); // Silence verbose dev-mode warnings
+
 addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
 addRxPlugin(RxDBUpdatePlugin);
@@ -98,12 +100,14 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
             'employees', 'timerecords', 'locations', 'departments', 'settings'
         ];
         
+        // Ensure clean base URL without trailing slash for processing
         const baseUrl = remoteUrl.replace(/\/+$/, '');
 
         collectionNames.forEach(colName => {
             const collection = db.collections[colName];
             if (collection) {
-                const url = `${baseUrl}/${colName}`;
+                // Fix RC_COUCHDB_1: Ensure URL ends with a slash
+                const url = `${baseUrl}/${colName}/`;
 
                 const replicationState = replicateCouchDB({
                     replicationIdentifier: `sync-${colName}`,
@@ -126,6 +130,12 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
                 activeReplications.push(replicationState);
             }
         });
+    };
+
+    // Expose wipe function
+    (db as any).wipe = async () => {
+        await db.remove();
+        window.location.reload();
     };
 
     return db;
