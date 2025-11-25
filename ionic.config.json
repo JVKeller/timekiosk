@@ -1,0 +1,7 @@
+{
+    "name": "TimeKiosk",
+    "integrations": {
+        "capacitor": {}
+    },
+    "type": "react"
+}

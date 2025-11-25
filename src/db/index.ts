@@ -1,14 +1,11 @@
 
-import { 
-    createRxDatabase, 
-    RxDatabase, 
+
+import {
+    createRxDatabase,
+    RxDatabase,
     RxCollection,
     addRxPlugin
 } from 'rxdb';
-import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
-import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
-import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
-import { wrappedKeyEncryptionCryptoJsStorage } from 'rxdb/plugins/encryption-crypto-js';
 import { replicateCouchDB, RxCouchDBReplicationState } from 'rxdb/plugins/replication-couchdb';
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
@@ -17,9 +14,10 @@ import { RxDBDevModePlugin, disableWarnings } from 'rxdb/plugins/dev-mode';
 import CryptoJS from 'crypto-js';
 import { BehaviorSubject } from 'rxjs';
 import * as schemas from './schemas';
+import { getPlatformStorage } from './storage';
 
 addRxPlugin(RxDBDevModePlugin);
-disableWarnings(); 
+disableWarnings();
 
 addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
@@ -36,37 +34,16 @@ export type TimeKioskCollections = {
 export type TimeKioskDatabase = RxDatabase<TimeKioskCollections>;
 
 const activeReplications: RxCouchDBReplicationState<any>[] = [];
-export const syncStatus$ = new BehaviorSubject<{ status: 'disconnected'|'connecting'|'connected'|'error', error?: string }>({ status: 'disconnected' });
-
-const isNode = typeof window === 'undefined';
-const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
-
-const getStorage = () => {
-    let baseStorage;
-    if (isNode) {
-        console.log('Initializing DB in Node environment (Memory)');
-        baseStorage = getRxStorageMemory();
-    } else {
-        baseStorage = getRxStorageDexie();
-    }
-
-    const encryptedStorage = wrappedKeyEncryptionCryptoJsStorage({
-        storage: baseStorage
-    });
-
-    return wrappedValidateAjvStorage({
-        storage: encryptedStorage
-    });
-};
+export const syncStatus$ = new BehaviorSubject<{ status: 'disconnected' | 'connecting' | 'connected' | 'error', error?: string }>({ status: 'disconnected' });
 
 const createDatabase = async (): Promise<TimeKioskDatabase> => {
     const dbName = 'timekioskdb_v8';
 
     const db = await createRxDatabase<TimeKioskCollections>({
         name: dbName,
-        storage: getStorage(),
+        storage: getPlatformStorage(),
         password: 'my-secret-encryption-password',
-        multiInstance: !isCapacitor,
+        multiInstance: true,
         ignoreDuplicate: true,
         hashFunction: (input: string) => {
             return Promise.resolve(CryptoJS.SHA256(input).toString());
@@ -98,7 +75,7 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
         const collectionNames: (keyof TimeKioskCollections)[] = [
             'employees', 'timerecords', 'locations', 'departments', 'settings'
         ];
-        
+
         const baseUrl = remoteUrl.replace(/\/+$/, '');
 
         collectionNames.forEach(colName => {
@@ -111,7 +88,7 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
                     collection: collection,
                     url: url,
                     live: true,
-                    retryTime: 5000, 
+                    retryTime: 5000,
                     pull: {
                         batchSize: 60,
                         heartbeat: 60000
@@ -120,11 +97,11 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
                         batchSize: 60
                     }
                 });
-                
+
                 replicationState.error$.subscribe(err => {
                     console.error(`Replication error (${colName}):`, err);
                     if (syncStatus$.value.status !== 'connected') {
-                         syncStatus$.next({ status: 'error', error: err.message || 'Connection Failed' });
+                        syncStatus$.next({ status: 'error', error: err.message || 'Connection Failed' });
                     }
                 });
 
@@ -149,10 +126,10 @@ const createDatabase = async (): Promise<TimeKioskDatabase> => {
         // If after 2 seconds we haven't errored, assume connected (optimistic)
         // Real connection confirmation comes from events above
         setTimeout(() => {
-             if (syncStatus$.value.status === 'connecting') {
-                 // Don't force 'connected' blindly, but if we are active without error, it's a good sign
-                 syncStatus$.next({ status: 'connected' });
-             }
+            if (syncStatus$.value.status === 'connecting') {
+                // Don't force 'connected' blindly, but if we are active without error, it's a good sign
+                syncStatus$.next({ status: 'connected' });
+            }
         }, 2500);
     };
 
